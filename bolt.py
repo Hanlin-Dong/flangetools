@@ -562,6 +562,41 @@ def set2surface(name):
     assert "." in name, "Invalid name."
     ins_name, set_name = name.split(".")
     a.Surface(name=name.replace(".", "-"), side1Faces=a.instances[ins_name].sets[set_name].faces)
+
+
+def create_flange(name, tube_diam, tube_thick, tube_height, fl_width, fl_thick, bolt_num, bolthole_diam, boltcirc_diam, washer_diam, inner=False):
+    s = mdb.models['Model-1'].ConstrainedSketch(name='__profile__', sheetSize=tube_diam)
+    g, v, d, c = s.geometry, s.vertices, s.dimensions, s.constraints
+    s.CircleByCenterPerimeter(center=(0.0, 0.0), point1=((tube_diam / 2.0) if inner else tube_diam / 2.0 + fl_width, 0.0))
+    s.CircleByCenterPerimeter(center=(0.0, 0.0), point1=((tube_diam / 2.0 - fl_width) if inner else tube_diam / 2.0 - tube_thick, 0.0))
+    p = mdb.models['Model-1'].Part(name=name, dimensionality=THREE_D, type=DEFORMABLE_BODY)
+    p.BaseSolidExtrude(sketch=s, depth=fl_thick)
+    del mdb.models['Model-1'].sketches['__profile__']
+    f, e = p.faces, p.edges
+    t = p.MakeSketchTransform(sketchPlane=f[2], sketchUpEdge=e[0], 
+        sketchPlaneSide=SIDE1, sketchOrientation=RIGHT, origin=(0.0, 0.0, 20.0))
+    s1 = mdb.models['Model-1'].ConstrainedSketch(name='__profile__', 
+        sheetSize=516.32, gridSpacing=12.9, transform=t)
+    g, v, d, c = s1.geometry, s1.vertices, s1.dimensions, s1.constraints
+    p.projectReferencesOntoSketch(sketch=s1, filter=COPLANAR_EDGES)
+    s1.CircleByCenterPerimeter(center=(0.0, 0.0), point1=(tube_diam / 2.0, 0.0))
+    s1.CircleByCenterPerimeter(center=(0.0, 0.0), point1=(tube_diam / 2.0 - tube_thick, 0.0))
+    f1, e = p.faces, p.edges
+    p.SolidExtrude(sketchPlane=f1[2], sketchUpEdge=e[0], sketchPlaneSide=SIDE1, 
+        sketchOrientation=RIGHT, sketch=s1, depth=tube_height, flipExtrudeDirection=OFF, 
+        keepInternalBoundaries=ON)
+    del mdb.models['Model-1'].sketches['__profile__']
+    datum = p.DatumPlaneByPrincipalPlane(principalPlane=YZPLANE, offset=0.0)
+    p.PartitionCellByDatumPlane(datumPlane=p.datums[datum.id], cells=p.cells)
+    datum = p.DatumPlaneByPrincipalPlane(principalPlane=XZPLANE, offset=0.0)
+    p.PartitionCellByDatumPlane(datumPlane=p.datums[datum.id], cells=p.cells)
+    crds = crds_circular_2d(boltcirc_diam / 2.0, bolt_num, angle=360.0, center=[0.0, 0.0], rotate=0.0, flip=False)
+    create_holes(name, crds, fl_thick, washer_diam / 2.0, bolthole_diam / 2.0, plane=3, offset=0.0, prefix="", flip=False)
+    p.seedPart(size=40.0, deviationFactor=0.1, minSizeFactor=0.1)
+    p.generateMesh()
+
+def create_flange_assembly():
+    pass
     
 
 
@@ -658,7 +693,7 @@ def test_instance_circular1():
     instance_circular("test_bolt", 400.0, 12)
 
 def test_instance_circular2():
-    # test pther axes
+    # test other axes
     bolt = bolt_m24.copy()
     bolt['name'] = 'test_bolt'
     bolt['boltcirc_rad'] = 100  # to see clearly.
@@ -678,11 +713,26 @@ def test_circular_crds():
 
 def main():
     create_part(**bolt_m24)
-    crds = flange_bolt_crds(400, 12)
+    crds = crds_circular(400, 12)
     instance_bolt('bolt_m24', crds, 2)
     prestress_bolt('bolt_m24', 12, 2000)
 
+def test_create_flange():
+    fl = {
+        "name": "flange", 
+        "tube_diam": 4300, 
+        "tube_thick": 40, 
+        "tube_height": 340,
+        "fl_width": 350, 
+        "fl_thick": 160, 
+        "bolt_num": 108, 
+        "bolthole_diam": 58, 
+        "boltcirc_diam": 4020, 
+        "washer_diam": 80,
+        "inner": True,    
+    }
+    create_flange(**fl)
+
 if __name__ == '__main__':
-    # test_instance_circular2()
-    test_circular_crds()
+    test_create_flange()
     
