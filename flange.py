@@ -6,10 +6,6 @@ from bolt import *
 from utils import *
 
 
-
-
-
-
 def part_flange(name, tube_rad, tube_thick, tube_height, fl_width, fl_thick, 
                 bolt_num, bolthole_offset, washer_rad, contact_thick, bolthole_rad,
                 draft=None, inner=False, seedsize=None, shell_seed_num=4, hole_on_axis=True, flip=False, quarter=False,
@@ -289,6 +285,18 @@ def part_flange(name, tube_rad, tube_thick, tube_height, fl_width, fl_thick,
         utils.set2surface("%s-1.low_tie" % shellname, edge=True)
         utils.set2surface("%s-1.up_tie" % shellname, edge=True)
         utils.shell2solid(["%s-1-low_tie" % shellname], ["%s-1-tie" % name], ["%s-1-tie" % name])
+        mdb.models['Model-1'].HomogeneousShellSection(name='%s_shell' % name, 
+            preIntegrate=OFF, material='%s_steel' % name, thicknessType=UNIFORM, 
+            thickness=tube_thick, thicknessField='', nodalThicknessField='', 
+            idealization=NO_IDEALIZATION, poissonDefinition=DEFAULT, 
+            thicknessModulus=None, temperature=GRADIENT, useDensity=OFF, 
+            integrationRule=SIMPSON, numIntPts=5)
+        p = mdb.models['Model-1'].parts[shellname]
+        region = p.Set(faces=p.faces, name='%s_shell' % name)
+        p.SectionAssignment(region=region, sectionName='%s_shell' % name, offset=0.0, 
+            offsetType=MIDDLE_SURFACE, offsetField='', 
+            thicknessAssignment=FROM_SECTION)
+
     if ref_point:
         zcoords = tube_height + fl_thick + shell_height
         if flip:
@@ -335,6 +343,10 @@ def assemble_flange(name, tube_rad, tube_thick, tube_height, fl_width, fl_thick,
         mdb.models['Model-1'].DisplacementBC(name='%s base fix' % name, createStepName='Initial', 
             region=a.sets['%s_y-refpt' % name], u1=SET, u2=SET, u3=SET, ur1=SET, ur2=SET, ur3=SET, 
             amplitude=UNSET, distributionType=UNIFORM, fieldName='', localCsys=None)
+        mdb.models['Model-1'].DisplacementBC(name='%s top temp fix' % name, createStepName='Initial', 
+            region=a.sets['%s_x-refpt' % name], u1=SET, u2=SET, u3=SET, ur1=SET, ur2=SET, ur3=SET, 
+            amplitude=UNSET, distributionType=UNIFORM, fieldName='', localCsys=None)
+        mdb.models['Model-1'].loads['%s top temp fix' % name].deactivate('bolt load pre2')
         mdb.models['Model-1'].ConcentratedForce(name='%s loading force' % name, 
             createStepName='loading', region=a.sets['%s_x-refpt' % name], cf1=loading[1], cf3=-loading[0], 
             distributionType=UNIFORM, field='', localCsys=None)
