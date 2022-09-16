@@ -2,12 +2,18 @@ import math
 from abaqus import *
 from abaqusConstants import *
 from caeModules import *
+from bolt import *
+from utils import *
 
-def create_flange(name, tube_rad, tube_height, tube_thick, 
-                  fl_width, fl_thick, 
-                  bolt_num, bolthole_offset, washer_rad, flange_contact_thick, bolthole_rad, 
-                  seedsize, flip, inner_flange, draft, 
-                  shell_seed_num, prelim, quarter, hole_on_axis):
+
+
+
+
+
+def part_flange(name, tube_rad, tube_thick, tube_height, fl_width, fl_thick, 
+                bolt_num, bolthole_offset, washer_rad, contact_thick, bolthole_rad,
+                draft=None, inner=False, seedsize=None, shell_seed_num=4, hole_on_axis=True, flip=False, quarter=False,
+                shell_height=0, ref_point=None):
     ############################################
     ##### SKETCH FOR UNIT FLANGE SOLID   #######
     ############################################
@@ -85,7 +91,7 @@ def create_flange(name, tube_rad, tube_height, tube_thick,
         flipExtrudeDirection=ON, keepInternalBoundaries=ON)
     del mdb.models['Model-1'].sketches['__profile__']
     f = p.faces
-    dp = p.DatumPlaneByOffset(plane=f[13], flip=SIDE2, offset=flange_contact_thick)
+    dp = p.DatumPlaneByOffset(plane=f[13], flip=SIDE2, offset=contact_thick)
     c = p.cells
     pickedCells = c.getSequenceFromMask(mask=('[#f ]', ), )
     d = p.datums
@@ -131,7 +137,7 @@ def create_flange(name, tube_rad, tube_height, tube_thick,
     ############################################
     ##### REDRAW SKETCH FOR INNER FLANGE #######
     ############################################
-    if inner_flange:
+    if inner:
         p = mdb.models['Model-1'].parts[unitname]
         s = p.features['Solid revolve-1'].sketch
         mdb.models['Model-1'].ConstrainedSketch(name='__edit__', objectToCopy=s)
@@ -199,7 +205,7 @@ def create_flange(name, tube_rad, tube_height, tube_thick,
     a.DatumCsysByDefault(CARTESIAN)
     a.Instance(name='%s-1' % unitname, part=p, dependent=ON)
     # innner flange, rotate to starting angle first.
-    if inner_flange:
+    if inner:
         a.rotate(instanceList=('%s-1' % unitname, ), axisPoint=(0.0, 0.0, 0.0), 
             axisDirection=(0.0, 10.0, 0.0), angle=180.0)
     # rotate half angle of the unit to avoid bolthole on the axis.
@@ -219,24 +225,27 @@ def create_flange(name, tube_rad, tube_height, tube_thick,
     else:
         a.RadialInstancePattern(instanceList=('%s-1' % unitname, ), point=(0.0, 0.0, 0.0), 
             axis=(0.0, -1.0, 0.0) if flip else (0.0, 1.0, 0.0), number=real_num_bolts, totalAngle=360.0)
-    for i in range(1, real_num_bolts):
+    for i in range(1, bolt_num):
         a.features.changeKey(fromName='%s-1-rad-%d' % (unitname, i+1), toName='%s-%d' % (unitname, i+1))
     ##### MERGE #####
-    for i in range(real_num_bolts):
-        a.Surface(name="%s-washer-%d" % (name, i+1), side1Faces=a.sets["%s-%d.washer" % (unitname, i+1)].faces)
-        a.Surface(name="%s-bolthole-%d" % (name, i+1), side1Faces=a.sets["%s-%d.bolthole" % (unitname, i+1)].faces)
-    instances = [a.instances["%s-%d" % (unitname, i+1)] for i in range(real_num_bolts)]
+    for i in range(bolt_num):
+        a.Surface(name="%s-1-%d-washer" % (name, i+1), side1Faces=a.sets["%s-%d.washer" % (unitname, i+1)].faces)
+        a.Surface(name="%s-1-%d-bolthole" % (name, i+1), side1Faces=a.sets["%s-%d.bolthole" % (unitname, i+1)].faces)
+    instances = [a.instances["%s-%d" % (unitname, i+1)] for i in range(bolt_num)]
     a.InstanceFromBooleanMerge(name=name, instances=instances,
         keepIntersections=ON, originalInstances=DELETE, domain=GEOMETRY)
-    a.Surface(name="%s-contact" % name, side1Faces=a.sets["%s-1.contact" % name].faces)
-    a.Surface(name="%s-tie" % name, side1Faces=a.sets["%s-1.tie" % name].faces)
-    a.Surface(name="%s-freesurf" % name, side1Faces=a.sets["%s-1.freesurf" % name].faces)
+    a.Surface(name="%s-1-contact" % name, side1Faces=a.sets["%s-1.contact" % name].faces)
+    a.Surface(name="%s-1-tie" % name, side1Faces=a.sets["%s-1.tie" % name].faces)
+    a.Surface(name="%s-1-freesurf" % name, side1Faces=a.sets["%s-1.freesurf" % name].faces)
     ##### FLIP FLANGE #####
     if flip:
         a.rotate(instanceList=('%s-1' % name,), 
             axisPoint=(0.0, 0.0, 0.0), axisDirection=(0.0, 0.0, 10.0), angle=180.0)
         a.rotate(instanceList=('%s-1' % name,), 
             axisPoint=(0.0, 0.0, 0.0), axisDirection=(0.0, 10.0, 0.0), angle=180.0)
+    a.rotate(instanceList=('%s-1' % name,), 
+        axisPoint=(0.0, 0.0, 0.0), axisDirection=(10.0, 0.0, 0.0), angle=90.0)
+        
     ##### MESH #####
     elemType1 = mesh.ElemType(elemCode=C3D8, elemLibrary=STANDARD)
     elemType2 = mesh.ElemType(elemCode=C3D6, elemLibrary=STANDARD)
@@ -244,44 +253,95 @@ def create_flange(name, tube_rad, tube_height, tube_thick,
     p = mdb.models['Model-1'].parts[name]
     region = p.sets['cell_all']
     p.setElementType(regions=region, elemTypes=(elemType1, elemType2, elemType3))
-    if not prelim:
-        elemType1 = mesh.ElemType(elemCode=C3D20, elemLibrary=STANDARD)
-        elemType2 = mesh.ElemType(elemCode=C3D15, elemLibrary=STANDARD)
-        elemType3 = mesh.ElemType(elemCode=C3D10, elemLibrary=STANDARD)
-        region = p.sets['cell_QW']
-        p.setElementType(regions=region, elemTypes=(elemType1, elemType2, elemType3))
     if seedsize is not None:
         p = mdb.models['Model-1'].parts[name]
         p.seedPart(size=seedsize, deviationFactor=0.1, minSizeFactor=0.1)
         edges = p.sets['seed_shell'].edges
         p.seedEdgeByNumber(edges=edges, number=shell_seed_num, constraint=FINER)
         p.generateMesh()
-
-def test_flange():
-    fl_up = {
-        'name': 'fl_up',
-        'tube_rad': 4300 / 2.0,
-        'fl_width': 300,
-        'fl_thick': 160,
-        'tube_height': 300,
-        'tube_thick': 40,
-        'bolt_num': 108,
-        'bolthole_offset': 120,
-        'washer_rad': 52.5,
-        'flange_contact_thick': 10,
-        'bolthole_rad': 30,
-        'seedsize': 30,
-        'shell_seed_num': 4,
-        'flip': False,
-        'inner_flange': True,
-        'draft': None,
-        'prelim': False,
-        'quarter': False,
-        'hole_on_axis': True,
-    }
-    print("fl_up", fl_up)
-    create_flange(**fl_up)
     
+    ##### Create shell #####
+    if shell_height != 0:
+        s = mdb.models['Model-1'].ConstrainedSketch(name='__profile__', 
+            sheetSize=5000.0)
+        g, v, d, c = s.geometry, s.vertices, s.dimensions, s.constraints
+        s.CircleByCenterPerimeter(center=(0.0, 0.0), point1=(tube_rad - tube_thick / 2.0, 0.0))
+        shellname = name + "_shell"
+        p = mdb.models['Model-1'].Part(name=shellname, dimensionality=THREE_D, 
+            type=DEFORMABLE_BODY)
+        p.BaseShellExtrude(sketch=s, depth=shell_height)
+        del mdb.models['Model-1'].sketches['__profile__']
+        if seedsize is not None:
+            p.seedPart(size=seedsize, deviationFactor=0.1, minSizeFactor=0.1)
+            p.generateMesh()
+        e = p.edges
+        edges = e.getSequenceFromMask(mask=('[#2 ]', ), )
+        p.Set(edges=edges, name='low_tie')
+        edges = e.getSequenceFromMask(mask=('[#1 ]', ), )
+        p.Set(edges=edges, name='up_tie')
+        a.Instance(name='%s-1' % shellname, part=p, dependent=ON)
+        if not flip:
+            a.translate(instanceList=('%s-1' % shellname, ), vector=(0.0, 0.0, tube_height + fl_thick))
+        else:
+            a.rotate(instanceList=('%s-1' % shellname,), 
+                axisPoint=(0.0, 0.0, 0.0), axisDirection=(10.0, 0.0, 0.0), angle=180.0)
+            a.translate(instanceList=('%s-1' % shellname, ), vector=(0.0, 0.0, -tube_height - fl_thick))
+        utils.set2surface("%s-1.low_tie" % shellname, edge=True)
+        utils.set2surface("%s-1.up_tie" % shellname, edge=True)
+        utils.shell2solid(["%s-1-low_tie" % shellname], ["%s-1-tie" % name], ["%s-1-tie" % name])
+    if ref_point:
+        zcoords = tube_height + fl_thick + shell_height
+        if flip:
+            zcoords = -zcoords
+        refpt = a.ReferencePoint(point=(0.0, 0.0, zcoords))
+        a.Set(name="%s-refpt" % name, referencePoints=(a.referencePoints[refpt.id],))
+        if shell_height == 0:
+            utils.couple(["%s-refpt" % name], ["%s-1-tie" % name], ["%s-refcouple" % name])
+        else:
+            utils.couple(["%s-refpt" % name], ["%s-1-up_tie" % shellname], ['%s-refcouple' % name])
 
-if __name__ == '__main__':
-    test_flange()
+def assemble_flange(name, tube_rad, tube_thick, tube_height, fl_width, fl_thick,
+                    bolt_num, bolthole_offset, washer_rad, contact_thick, bolthole_rad,
+                    bolt_rad, washer_thick, hex_circrad, hex_height, bolt_prestress, seedsize=None, 
+                    shell_height=0.0, loading=None):
+
+    part_flange(name + "_x", tube_rad, tube_thick, tube_height, fl_width, fl_thick,
+                  bolt_num, bolthole_offset, washer_rad, contact_thick, bolthole_rad, 
+                  inner=True, seedsize=seedsize, shell_height=shell_height, ref_point=True)
+    part_flange(name + "_y", tube_rad, tube_thick, tube_height, fl_width, fl_thick,
+                  bolt_num, bolthole_offset, washer_rad, contact_thick, bolthole_rad, 
+                  inner=True, seedsize=seedsize, flip=True, shell_height=shell_height, ref_point=True)
+    part_bolt(name + "_b", bolt_rad, fl_thick, washer_thick, washer_rad, 
+              tube_rad - bolthole_offset, hex_circrad, hex_height, None if seedsize is None else seedsize / 2.0)
+    instance_circular(name + "_b", tube_rad - bolthole_offset, bolt_num, axis=3)
+    contact(
+        ["%s_x-1-%d-washer" % (name, i+1) for i in range(bolt_num)],
+        ["%s_b-%d-washer_side1" % (name, i+1) for i in range(bolt_num)],
+        ["%s_b-%d-washer_side1" % (name, i+1) for i in range(bolt_num)]
+    )
+    contact(
+        ["%s_y-1-%d-washer" % (name, i+1) for i in range(bolt_num)],
+        ["%s_b-%d-washer_side2" % (name, i+1) for i in range(bolt_num)],
+        ["%s_b-%d-washer_side2" % (name, i+1) for i in range(bolt_num)]
+    )
+    contact(
+        ["%s_x-1-contact" % name], ["%s_y-1-contact" % name], ["%s-contact" % name]
+    )
+    for i in range(bolt_num):
+        prestress("%s-%d" % (name + "_b", i+1), bolt_prestress)
+    a = mdb.models['Model-1'].rootAssembly
+    if loading is not None:
+        mdb.models['Model-1'].StaticStep(name='loading', previous='bolt load sustain')
+        mdb.models['Model-1'].DisplacementBC(name='%s base fix' % name, createStepName='Initial', 
+            region=a.sets['%s_y-refpt' % name], u1=SET, u2=SET, u3=SET, ur1=SET, ur2=SET, ur3=SET, 
+            amplitude=UNSET, distributionType=UNIFORM, fieldName='', localCsys=None)
+        mdb.models['Model-1'].ConcentratedForce(name='%s loading force' % name, 
+            createStepName='loading', region=a.sets['%s_x-refpt' % name], cf1=loading[1], cf3=-loading[0], 
+            distributionType=UNIFORM, field='', localCsys=None)
+        mdb.models['Model-1'].Moment(name='%s loading moment' % name, createStepName='loading', 
+            region=a.sets['%s_x-refpt' % name], cm2=loading[2], cm3=loading[3], distributionType=UNIFORM, 
+            field='', localCsys=None)
+
+
+        
+    
