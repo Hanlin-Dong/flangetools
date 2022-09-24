@@ -221,10 +221,6 @@ def instance_2d(boltname, crds, axis=3, offset=0.0, suffix=""):
         else:
             raise Exception("axis should be in 1,2,3,-1,-2,-3")
             
-        # a.Surface(name='%s-washer_side1-%d' % (insname, i+1), side1Faces=a.sets['%s-%d.washer_side1' % (insname, i+1)].faces)
-        # a.Surface(name='%s-washer_side2-%d' % (insname, i+1), side1Faces=a.sets['%s-%d.washer_side2' % (insname, i+1)].faces)
-        # a.Surface(name='%s-shank_wall-%d' % (insname, i+1), side1Faces=a.sets['%s-%d.shank_wall' % (insname, i+1)].faces)
-        # a.Surface(name='%s-shank_mid-%d' % (insname, i+1), side1Faces=a.sets['%s-%d.shank_mid' % (insname, i+1)].faces)
         for setname in ["washer_side1", "washer_side2", "shank_wall", "shank_mid"]:
             utils.set2surface("%s-%d.%s" % (insname, i+1, setname))
 
@@ -274,47 +270,42 @@ def instance_circular(boltname, rad, num, angle=360, axis=3, center=(0.0, 0.0, 0
                      angle=indiv_angle * i + rotate)
         else:
             raise Exception("Axis should be 1,2,3,-1,-2,-3.")
-        # a.Surface(name='%s-washer_side1-%d' % (insname, i+1), side1Faces=a.sets['%s-%d.washer_side1' % (insname, i+1)].faces)
-        # a.Surface(name='%s-washer_side2-%d' % (insname, i+1), side1Faces=a.sets['%s-%d.washer_side2' % (insname, i+1)].faces)
-        # a.Surface(name='%s-shank_wall-%d' % (insname, i+1), side1Faces=a.sets['%s-%d.shank_wall' % (insname, i+1)].faces)
-        # a.Surface(name='%s-shank_mid-%d' % (insname, i+1), side1Faces=a.sets['%s-%d.shank_mid' % (insname, i+1)].faces)
-        # a.Surface(name='%s-hex_side1-%d' % (insname, i+1), side1Faces=a.sets['%s-%d.hex_side1' % (insname, i+1)].faces)
         for setname in ['washer_side1', 'washer_side2', 'shank_wall', 'shank_mid', 'hex_side1']:
             utils.set2surface("%s-%d.%s" % (insname, i+1, setname))
         
 
-def crds_circular(rad, num, angle=360.0, axis=3, center=[0.0, 0.0, 0.0], rotate=0.0, flip=False):
-    import cmath
+# def crds_circular(rad, num, angle=360.0, axis=3, center=[0.0, 0.0, 0.0], rotate=0.0, flip=False):
+#     import cmath
 
-    step = cmath.pi * 2 / 360.0 * angle / num
-    rho = rad
-    crds = []
-    for i in range(num):
-        phi = step * i + cmath.pi / 180.0 * rotate
-        res = cmath.rect(rho, phi)
-        if axis == 3:
-            crds.append([center[0] + res.real, center[1] + res.imag, center[2]])
-        elif axis == 2:
-            crds.append([center[0] + res.real, center[1], center[2] + res.imag])
-        elif axis == 1:
-            crds.append([center[0], center[1] + res.real, center[2] + res.imag])
-        else:
-            raise Exception("axis should be in 1,2,3.")
-    return crds
+#     step = cmath.pi * 2 / 360.0 * angle / num
+#     rho = rad
+#     crds = []
+#     for i in range(num):
+#         phi = step * i + cmath.pi / 180.0 * rotate
+#         res = cmath.rect(rho, phi)
+#         if axis == 3:
+#             crds.append([center[0] + res.real, center[1] + res.imag, center[2]])
+#         elif axis == 2:
+#             crds.append([center[0] + res.real, center[1], center[2] + res.imag])
+#         elif axis == 1:
+#             crds.append([center[0], center[1] + res.real, center[2] + res.imag])
+#         else:
+#             raise Exception("axis should be in 1,2,3.")
+#     return crds
 
-def crds_circular_2d(rad, num, angle=360.0, center=[0.0, 0.0], rotate=0.0, flip=False):
-    import cmath
+# def crds_circular_2d(rad, num, angle=360.0, center=[0.0, 0.0], rotate=0.0, flip=False):
+#     import cmath
 
-    step = cmath.pi * 2 / 360.0 * angle / num
-    rho = rad
-    crds = []
-    for i in range(num):
-        phi = step * i + cmath.pi / 180.0 * rotate
-        if flip:
-            phi = -phi
-        res = cmath.rect(rho, phi)
-        crds.append([center[0] + res.real, center[1] + res.imag])
-    return crds
+#     step = cmath.pi * 2 / 360.0 * angle / num
+#     rho = rad
+#     crds = []
+#     for i in range(num):
+#         phi = step * i + cmath.pi / 180.0 * rotate
+#         if flip:
+#             phi = -phi
+#         res = cmath.rect(rho, phi)
+#         crds.append([center[0] + res.real, center[1] + res.imag])
+#     return crds
 
 
 # def flange_bolt_crds(boltcirc_rad, num_bolts, hole_on_axis=True):
